@@ -3,6 +3,20 @@
 import { useState, useEffect, useRef } from 'react'
 import type { StopWithHunt } from '@/types'
 
+
+// ─── Media embed helper ───────────────────────────────────────────────────────
+function isGDrive(url: string) { return url.includes('drive.google.com') }
+
+function MediaEmbed({ url, mediaType, className }: { url: string; mediaType: string | null; className: string }) {
+  if (isGDrive(url)) {
+    return <iframe src={url} className={className} allow="autoplay" allowFullScreen title="media" style={{ border: 'none' }} />
+  }
+  if (mediaType === 'video') {
+    return <video src={url} className={className} autoPlay muted loop playsInline />
+  }
+  return <img src={url} alt="" className={className} />
+}
+
 // ─── Confetti ─────────────────────────────────────────────────────────────────
 // Pure canvas confetti — no npm package.
 
@@ -210,22 +224,7 @@ export default function FinaleReveal({ data }: { data: StopWithHunt }) {
           {/* Media */}
           {stop.media_url && (
             <div className="finale-media">
-              {stop.media_type === 'video' ? (
-                <video
-                  src={stop.media_url}
-                  className="finale-media-asset"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                />
-              ) : (
-                <img
-                  src={stop.media_url}
-                  alt=""
-                  className="finale-media-asset"
-                />
-              )}
+              <MediaEmbed url={stop.media_url} mediaType={stop.media_type} className="finale-media-asset" />
               <div className="finale-media-fade" />
             </div>
           )}

@@ -1,21 +1,22 @@
 'use server'
 
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { CreateHuntInput, HuntWithStops, StopWithHunt } from '@/types'
 
 // ─── Create Hunt ───────────────────────────────────────────────────────────────
-// Inserts the hunt row first, then bulk-inserts all stops in one query.
-// Returns the new hunt's ID so the caller can redirect to /hunt/[id]/admin.
+// Media URLs are resolved client-side before this is called.
+// This action only writes to the database — no file handling here.
 
 export async function createHunt(input: CreateHuntInput): Promise<string> {
-  const supabase = await createClient()
+  const cookieStore = await cookies()
+  const supabase = await createClient(cookieStore)
 
-  // 1. Insert hunt
   const { data: hunt, error: huntError } = await supabase
     .from('hunts')
     .insert({
       mother_name: input.mother_name,
-      created_by: input.created_by,
+      created_by:  input.created_by,
     })
     .select()
     .single()
@@ -24,10 +25,15 @@ export async function createHunt(input: CreateHuntInput): Promise<string> {
     throw new Error(huntError?.message ?? 'Failed to create hunt')
   }
 
-  // 2. Bulk-insert stops, attaching the hunt id
   const stopsToInsert = input.stops.map((stop) => ({
-    ...stop,
-    hunt_id: hunt.id,
+    hunt_id:       hunt.id,
+    stop_order:    stop.stop_order,
+    location_hint: stop.location_hint,
+    message:       stop.message,
+    media_url:     stop.media_url,
+    media_type:    stop.media_type,
+    next_hint:     stop.next_hint,
+    is_finale:     stop.is_finale,
   }))
 
   const { error: stopsError } = await supabase
@@ -42,50 +48,56 @@ export async function createHunt(input: CreateHuntInput): Promise<string> {
 }
 
 // ─── Get Hunt with all Stops ───────────────────────────────────────────────────
-// Used in the admin page. Returns the hunt + all stops sorted by order.
 
 export async function getHuntWithStops(huntId: string): Promise<HuntWithStops | null> {
-  const supabase = await createClient()
+  const cookieStore = await cookies()
+  const supabase = await createClient(cookieStore)
 
-  const { data, error } = await supabase
+  const { data: hunt, error: huntError } = await supabase
     .from('hunts')
-    .select(`
-      *,
-      stops (*)
-    `)
+    .select('*')
     .eq('id', huntId)
-    .order('order', { referencedTable: 'stops', ascending: true })
     .single()
 
-  if (error || !data) return null
+  if (huntError || !hunt) return null
 
-  return data as HuntWithStops
+  const { data: stops, error: stopsError } = await supabase
+    .from('stops')
+    .select('*')
+    .eq('hunt_id', huntId)
+    .order('stop_order', { ascending: true })
+
+  if (stopsError) return null
+
+  return { ...hunt, stops: stops ?? [] } as HuntWithStops
 }
 
 // ─── Get Single Stop with Hunt context ────────────────────────────────────────
-// Used in the stop reveal page.
-// Returns the stop + its parent hunt + total non-finale stop count.
 
 export async function getStopWithHunt(
   huntId: string,
   stopId: string
 ): Promise<StopWithHunt | null> {
-  const supabase = await createClient()
+  const cookieStore = await cookies()
+  const supabase = await createClient(cookieStore)
 
-  // Fetch the stop, joining its parent hunt
   const { data: stop, error: stopError } = await supabase
     .from('stops')
-    .select(`
-      *,
-      hunt:hunts (*)
-    `)
+    .select('*')
     .eq('id', stopId)
     .eq('hunt_id', huntId)
     .single()
 
   if (stopError || !stop) return null
 
-  // Count total non-finale stops so the reveal page can show "Stop 2 of 4"
+  const { data: hunt, error: huntError } = await supabase
+    .from('hunts')
+    .select('*')
+    .eq('id', huntId)
+    .single()
+
+  if (huntError || !hunt) return null
+
   const { count } = await supabase
     .from('stops')
     .select('*', { count: 'exact', head: true })
@@ -94,42 +106,7 @@ export async function getStopWithHunt(
 
   return {
     ...stop,
-    hunt: stop.hunt,
+    hunt,
     totalStops: count ?? 0,
   } as StopWithHunt
-}
-
-// ─── Upload Media ──────────────────────────────────────────────────────────────
-// Uploads an image or video to Supabase Storage (bucket: hunt-media).
-// Returns the public URL to be stored in the stop row.
-// Called from the Create wizard with a FormData payload.
-
-export async function uploadMedia(formData: FormData): Promise<string> {
-  const supabase = await createClient()
-
-  const file = formData.get('file') as File
-
-  if (!file || file.size === 0) {
-    throw new Error('No file provided')
-  }
-
-  const ext = file.name.split('.').pop()
-  const fileName = `${crypto.randomUUID()}.${ext}`
-  const arrayBuffer = await file.arrayBuffer()
-
-  const { error: uploadError } = await supabase.storage
-    .from('hunt-media')
-    .upload(fileName, arrayBuffer, {
-      contentType: file.type,
-      cacheControl: '3600',
-      upsert: false,
-    })
-
-  if (uploadError) {
-    throw new Error(uploadError.message)
-  }
-
-  const { data } = supabase.storage.from('hunt-media').getPublicUrl(fileName)
-
-  return data.publicUrl
 }

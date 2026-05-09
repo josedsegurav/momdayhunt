@@ -12,7 +12,7 @@ export type Hunt = {
 export type Stop = {
   id: string
   hunt_id: string
-  order: number
+  stop_order: number        // renamed from `order` — reserved SQL keyword
   location_hint: string
   message: string
   media_url: string | null
@@ -28,8 +28,6 @@ export type HuntWithStops = Hunt & {
   stops: Stop[]
 }
 
-// Stop with its parent hunt — used in the reveal page so we have
-// mother_name, created_by, and total stop count available.
 export type StopWithHunt = Stop & {
   hunt: Hunt
   totalStops: number
@@ -38,7 +36,7 @@ export type StopWithHunt = Stop & {
 // ─── Input types (for server actions) ─────────────────────────────────────────
 
 export type CreateStopInput = {
-  order: number
+  stop_order: number        // renamed from `order`
   location_hint: string
   message: string
   media_url: string | null

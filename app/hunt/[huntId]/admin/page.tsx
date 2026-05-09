@@ -3,6 +3,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { getHuntWithStops } from '@/lib/actions'
 import NfcStopCard from './Nfcstopcard'
+import ShareBox from './Sharebox'
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
@@ -23,9 +24,10 @@ function stopUrl(huntId: string, stopId: string): string {
 export default async function AdminPage({
   params,
 }: {
-  params: { huntId: string }
+  params: Promise<{ huntId: string }>
 }) {
-  const hunt = await getHuntWithStops(params.huntId)
+  const { huntId } = await params
+  const hunt = await getHuntWithStops(huntId)
   if (!hunt) notFound()
 
   const regularStops = hunt.stops.filter((s) => !s.is_finale)
@@ -52,6 +54,9 @@ export default async function AdminPage({
             </p>
           </div>
         </header>
+
+        {/* ── Share box ──────────────────────────────────────────────────── */}
+        <ShareBox huntId={hunt.id} motherName={hunt.mother_name} />
 
         {/* ── Instructions card ──────────────────────────────────────────── */}
         <div className="instructions-card card animate-fade-up" style={{ animationDelay: '0.1s' }}>

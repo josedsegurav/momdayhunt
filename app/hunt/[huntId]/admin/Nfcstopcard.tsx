@@ -8,12 +8,12 @@ import type { Stop } from '@/types'
 type NfcSupport = 'detecting' | 'supported' | 'unsupported'
 type WriteState = 'idle' | 'waiting' | 'success' | 'error'
 
-// ─── QR code via free API (no dependency needed) ─────────────────────────────
+// ─── QR code via free API (no dependency needed) ──────────────────────────────
 function qrUrl(data: string) {
   return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(data)}`
 }
 
-// ─── Copy to clipboard helper ─────────────────────────────────────────────────
+// ─── Copy to clipboard ────────────────────────────────────────────────────────
 async function copyText(text: string) {
   try {
     await navigator.clipboard.writeText(text)
@@ -34,28 +34,22 @@ export default function NfcStopCard({
   stopUrl: string
   index:   number
 }) {
-  const [nfcSupport,  setNfcSupport]  = useState<NfcSupport>('detecting')
-  const [writeState,  setWriteState]  = useState<WriteState>('idle')
-  const [writeError,  setWriteError]  = useState<string | null>(null)
-  const [copied,      setCopied]      = useState(false)
-  const [written,     setWritten]     = useState(false)
-  const [showQr,      setShowQr]      = useState(false)
-  const [expanded,    setExpanded]    = useState(false)
+  const [nfcSupport, setNfcSupport] = useState<NfcSupport>('detecting')
+  const [writeState, setWriteState] = useState<WriteState>('idle')
+  const [writeError, setWriteError] = useState<string | null>(null)
+  const [copied,     setCopied]     = useState(false)
+  const [written,    setWritten]    = useState(false)
+  const [showQr,     setShowQr]     = useState(false)
+  const [expanded,   setExpanded]   = useState(false)
 
   // ── Detect NFC support on mount ───────────────────────────────────────────
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Restore written state from localStorage
     const saved = localStorage.getItem(`nfc-written-${stop.id}`)
     if (saved === 'true') setWritten(true)
 
-    // Web NFC is only available in Chrome on Android
-    if ('NDEFReader' in window) {
-      setNfcSupport('supported')
-    } else {
-      setNfcSupport('unsupported')
-    }
+    setNfcSupport('NDEFReader' in window ? 'supported' : 'unsupported')
   }, [stop.id])
 
   // ── Write tag via Web NFC API ─────────────────────────────────────────────
@@ -64,21 +58,16 @@ export default function NfcStopCard({
     setWriteError(null)
 
     try {
-      // @ts-ignore — NDEFReader is not in TypeScript DOM lib yet
+      // @ts-ignore — NDEFReader not yet in TS DOM lib
       const ndef = new NDEFReader()
-      await ndef.write({
-        records: [{ recordType: 'url', data: stopUrl }],
-      })
+      await ndef.write({ records: [{ recordType: 'url', data: stopUrl }] })
 
       setWriteState('success')
       setWritten(true)
       localStorage.setItem(`nfc-written-${stop.id}`, 'true')
-
-      // Reset to idle after 3s so the button is reusable
       setTimeout(() => setWriteState('idle'), 3000)
 
     } catch (err: any) {
-      // User cancelled or tag wasn't held long enough — don't treat as hard error
       if (err?.name === 'AbortError' || err?.name === 'NotAllowedError') {
         setWriteState('idle')
       } else {
@@ -111,18 +100,14 @@ export default function NfcStopCard({
         className={`nfc-card card ${written ? 'nfc-card--written' : ''} ${stop.is_finale ? 'nfc-card--finale' : ''}`}
         style={{ animationDelay: `${index * 0.07}s` }}
       >
-        {/* ── Card header ─────────────────────────────────────────────── */}
+        {/* ── Card header ──────────────────────────────────────────────── */}
         <div className="nfc-card-header">
           <div className="nfc-card-meta">
             <span className={`badge ${stop.is_finale ? 'badge-warm' : 'badge-rose'}`}>
-              {stop.is_finale ? '🌸 Finale' : `Stop ${stop.order}`}
+              {stop.is_finale ? '🌸 Finale' : `Stop ${stop.stop_order}`}
             </span>
-            {written && (
-              <span className="written-badge">✓ Written</span>
-            )}
+            {written && <span className="written-badge">✓ Written</span>}
           </div>
-
-          {/* Expand/collapse */}
           <button
             className="expand-btn"
             onClick={() => setExpanded((v) => !v)}
@@ -132,12 +117,12 @@ export default function NfcStopCard({
           </button>
         </div>
 
-        {/* ── Location hint ────────────────────────────────────────────── */}
+        {/* ── Location hint ─────────────────────────────────────────────── */}
         <div className="nfc-card-body">
           <p className="nfc-location-hint">📍 {stop.location_hint}</p>
         </div>
 
-        {/* ── Expanded: URL + actions ──────────────────────────────────── */}
+        {/* ── Expanded: URL + actions ───────────────────────────────────── */}
         {expanded && (
           <div className="nfc-card-expanded animate-fade-up">
 
@@ -147,7 +132,7 @@ export default function NfcStopCard({
               <p className="url-text">{stopUrl}</p>
             </div>
 
-            {/* ── Android: Web NFC write ── */}
+            {/* Android: Web NFC write */}
             {nfcSupport === 'supported' && (
               <div className="nfc-write-section">
                 <button
@@ -160,7 +145,7 @@ export default function NfcStopCard({
                   disabled={writeState === 'waiting'}
                 >
                   {writeState === 'idle'    && <><span className="nfc-icon">📶</span> Tap to write tag</>}
-                  {writeState === 'waiting' && <><span className="spinner" />  Hold tag to phone…</>}
+                  {writeState === 'waiting' && <><span className="spinner" /> Hold tag to phone…</>}
                   {writeState === 'success' && <>✓ Tag written!</>}
                   {writeState === 'error'   && <>✕ Try again</>}
                 </button>
@@ -175,7 +160,7 @@ export default function NfcStopCard({
               </div>
             )}
 
-            {/* ── iPhone / unsupported browser ── */}
+            {/* iPhone / unsupported browser */}
             {nfcSupport === 'unsupported' && (
               <div className="unsupported-section">
                 <div className="unsupported-banner">
@@ -199,10 +184,10 @@ export default function NfcStopCard({
               </div>
             )}
 
-            {/* ── Copy URL (always shown) ── */}
+            {/* Copy + QR (always shown) */}
             <div className="copy-row">
               <button
-                className={`btn ${copied ? 'btn-secondary copied-btn' : 'btn-secondary'}`}
+                className={`btn ${copied ? 'share-copy-btn--copied' : 'btn-secondary'}`}
                 onClick={handleCopy}
               >
                 {copied ? '✓ Copied!' : '⎘ Copy URL'}
@@ -215,7 +200,6 @@ export default function NfcStopCard({
               </button>
             </div>
 
-            {/* ── QR code ── */}
             {showQr && (
               <div className="qr-section animate-fade-up">
                 <p className="text-muted qr-hint">
@@ -223,7 +207,7 @@ export default function NfcStopCard({
                 </p>
                 <img
                   src={qrUrl(stopUrl)}
-                  alt={`QR code for stop ${stop.order}`}
+                  alt={`QR code for stop ${stop.stop_order}`}
                   className="qr-image"
                   width={180}
                   height={180}
@@ -231,17 +215,14 @@ export default function NfcStopCard({
               </div>
             )}
 
-            {/* ── Manual written toggle ── */}
+            {/* Manual written toggle */}
             <button className="mark-written-btn" onClick={toggleWritten}>
-              {written
-                ? '✕ Mark as not written'
-                : '✓ Mark as written'}
+              {written ? '✕ Mark as not written' : '✓ Mark as written'}
             </button>
           </div>
         )}
       </div>
 
-      {/* ── Scoped styles ─────────────────────────────────────────────────── */}
       <style>{`
         .nfc-card {
           width: 100%;
@@ -255,9 +236,7 @@ export default function NfcStopCard({
           background: linear-gradient(135deg, #fff9fa, var(--white));
         }
 
-        .nfc-card--finale {
-          border-color: var(--blush);
-        }
+        .nfc-card--finale { border-color: var(--blush); }
 
         .nfc-card-header {
           display: flex;
@@ -267,15 +246,10 @@ export default function NfcStopCard({
           cursor: pointer;
         }
 
-        .nfc-card-meta {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-        }
+        .nfc-card-meta { display: flex; align-items: center; gap: var(--space-2); }
 
         .written-badge {
-          font-size: 11px;
-          font-weight: 600;
+          font-size: 11px; font-weight: 600;
           color: var(--deep);
           background: #fff0f3;
           border: 1px solid var(--blush);
@@ -293,20 +267,12 @@ export default function NfcStopCard({
           cursor: pointer;
           transition: background var(--duration-fast) ease;
         }
-
         .expand-btn:hover { background: var(--sand); }
 
-        .nfc-card-body {
-          padding: 0 var(--space-5) var(--space-4);
-        }
+        .nfc-card-body { padding: 0 var(--space-5) var(--space-4); }
 
-        .nfc-location-hint {
-          font-size: 14px;
-          color: var(--text-soft);
-          font-weight: 500;
-        }
+        .nfc-location-hint { font-size: 14px; color: var(--text-soft); font-weight: 500; }
 
-        /* ── Expanded ── */
         .nfc-card-expanded {
           border-top: 1px solid var(--sand);
           padding: var(--space-5);
@@ -320,132 +286,63 @@ export default function NfcStopCard({
           border-radius: var(--radius-md);
           padding: var(--space-3) var(--space-4);
         }
-
         .url-box .label { margin-bottom: var(--space-1); }
+        .url-text { font-size: 12px; font-family: monospace; color: var(--text-soft); word-break: break-all; line-height: 1.6; }
 
-        .url-text {
-          font-size: 12px;
-          font-family: monospace;
-          color: var(--text-soft);
-          word-break: break-all;
-          line-height: 1.6;
-        }
-
-        /* ── NFC write button states ── */
         .nfc-write-btn {
-          width: 100%;
-          padding: 16px;
-          font-size: 15px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: var(--space-2);
+          width: 100%; padding: 16px; font-size: 15px;
+          display: flex; align-items: center; justify-content: center; gap: var(--space-2);
         }
-
-        .nfc-write-btn--waiting {
-          background: var(--sand);
-          color: var(--muted);
-          border: 1.5px solid var(--blush);
-          animation: shimmer 1.8s linear infinite;
-          background-size: 200% auto;
-        }
-
-        .nfc-write-btn--success {
-          background: linear-gradient(135deg, #34c759, #28a745);
-          color: white;
-          border: none;
-          box-shadow: 0 4px 16px rgba(52, 199, 89, 0.35);
-        }
-
-        .nfc-write-btn--error {
-          background: linear-gradient(135deg, #ff6b6b, #c0392b);
-          color: white;
-          border: none;
-        }
+        .nfc-write-btn--waiting { background: var(--sand); color: var(--muted); border: 1.5px solid var(--blush); }
+        .nfc-write-btn--success { background: linear-gradient(135deg, #34c759, #28a745); color: white; border: none; box-shadow: 0 4px 16px rgba(52,199,89,0.35); }
+        .nfc-write-btn--error   { background: linear-gradient(135deg, #ff6b6b, #c0392b); color: white; border: none; }
 
         .nfc-icon { font-size: 18px; }
 
-        .nfc-waiting-hint {
-          text-align: center;
-          font-size: 12px;
-          animation: fadeIn 0.4s ease;
-        }
+        .nfc-waiting-hint { text-align: center; font-size: 12px; animation: fadeIn 0.4s ease; }
 
-        .nfc-write-section {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-2);
-        }
+        .nfc-write-section { display: flex; flex-direction: column; gap: var(--space-2); }
 
-        /* ── Unsupported ── */
         .unsupported-banner {
-          display: flex;
-          gap: var(--space-3);
-          align-items: flex-start;
-          background: var(--sand);
-          border-radius: var(--radius-md);
-          padding: var(--space-4);
+          display: flex; gap: var(--space-3); align-items: flex-start;
+          background: var(--sand); border-radius: var(--radius-md); padding: var(--space-4);
         }
-
-        .unsupported-icon { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
+        .unsupported-icon  { font-size: 22px; flex-shrink: 0; margin-top: 2px; }
         .unsupported-title { font-weight: 500; font-size: 14px; margin-bottom: var(--space-1); }
-        .unsupported-desc { font-size: 13px; line-height: 1.55; }
+        .unsupported-desc  { font-size: 13px; line-height: 1.55; }
+        .nfc-tools-link    { color: var(--deep); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
 
-        .nfc-tools-link {
-          color: var(--deep);
-          font-weight: 500;
-          text-decoration: underline;
-          text-underline-offset: 2px;
-        }
-
-        /* ── Copy row ── */
-        .copy-row {
-          display: flex;
-          gap: var(--space-2);
-        }
-
+        .copy-row { display: flex; gap: var(--space-2); }
         .copy-row .btn { flex: 1; }
 
-        .copied-btn {
+        .share-copy-btn--copied {
           background: var(--blush-light);
-          border-color: var(--rose);
+          border: 1.5px solid var(--rose);
           color: var(--deep);
+          border-radius: var(--radius-full);
+          padding: 14px var(--space-8);
+          font-size: 14px;
+          font-weight: 500;
         }
 
-        /* ── QR ── */
         .qr-section {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: var(--space-3);
+          display: flex; flex-direction: column; align-items: center; gap: var(--space-3);
           padding: var(--space-4);
           background: var(--white);
           border: 1px solid var(--blush);
           border-radius: var(--radius-md);
         }
+        .qr-hint  { font-size: 12px; text-align: center; }
+        .qr-image { border-radius: var(--radius-md); border: 1px solid var(--sand-dark); }
 
-        .qr-hint { font-size: 12px; text-align: center; }
-
-        .qr-image {
-          border-radius: var(--radius-md);
-          border: 1px solid var(--sand-dark);
-        }
-
-        /* ── Mark written toggle ── */
         .mark-written-btn {
-          background: none;
-          border: none;
-          color: var(--muted);
-          font-size: 12px;
-          font-family: var(--font-body);
-          cursor: pointer;
-          padding: var(--space-1) 0;
-          text-decoration: underline;
-          text-underline-offset: 3px;
+          background: none; border: none;
+          color: var(--muted); font-size: 12px; font-family: var(--font-body);
+          cursor: pointer; padding: var(--space-1) 0;
+          text-decoration: underline; text-underline-offset: 3px;
           align-self: flex-start;
           transition: color var(--duration-fast) ease;
         }
-
         .mark-written-btn:hover { color: var(--deep); }
       `}</style>
     </>
