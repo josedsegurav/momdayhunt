@@ -10,7 +10,7 @@ function isGDrive(url: string) { return url.includes('drive.google.com') }
 
 function MediaEmbed({ url, mediaType, className }: { url: string; mediaType: string | null; className: string }) {
   if (isGDrive(url)) {
-    return <iframe src={url} className={className} allow="autoplay" allowFullScreen title="media" style={{ border: 'none' }} />
+    return <iframe src={url} className={className} style={{ border: 'none' }} />
   }
   if (mediaType === 'video') {
     return <video src={url} className={className} autoPlay muted loop playsInline />
@@ -86,7 +86,7 @@ export default function StopReveal({ data }: { data: StopWithHunt }) {
           {stop.media_url && (
             <div className={`reveal-media ${revealMedia ? 'reveal-layer--in reveal-media--in' : ''}`}>
               <MediaEmbed url={stop.media_url} mediaType={stop.media_type} className="reveal-media-asset" />
-              <div className="reveal-media-fade" />
+              {/* <div className="reveal-media-fade" /> */}
             </div>
           )}
 
